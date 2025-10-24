@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="km">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ហ្គេមចុចគោលដៅ — Clicker Game</title>
+  <style>
+    :root{ --bg:#0f1724; --card:#0b1220; --accent:#06b6d4; --muted:#94a3b8; }
+    *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,Segoe UI,Roboto,'Noto Sans Khmer',sans-serif}
+    body{background:linear-gradient(180deg,#071024 0%, #06202a 100%);color:#e6eef8;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));width:900px;max-width:100%;border-radius:12px;padding:20px;box-shadow:0 6px 30px rgba(2,6,23,0.6);display:grid;grid-template-columns:320px 1fr;gap:18px}
+    .left{padding:12px;border-radius:10px;background:rgba(255,255,255,0.02)}
+    h1{font-size:20px;margin-bottom:8px}
+    p.small{color:var(--muted);font-size:13px}
+    .stats{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+    .stat{background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;min-width:110px}
+    .big{font-size:22px;font-weight:700}
+    .arena{position:relative;background:linear-gradient(180deg,#071a2a,#04202d);border-radius:12px;overflow:hidden;border:2px solid rgba(255,255,255,0.03)}
+    #playArea{height:420px;display:flex;align-items:center;justify-content:center;position:relative}
+    .target{position:absolute;width:64px;height:64px;border-radius:50%;background:linear-gradient(180deg,var(--accent),#0284a2);display:flex;align-items:center;justify-content:center;color:#00121a;font-weight:800;font-size:18px;cursor:pointer;box-shadow:0 6px 18px rgba(3,9,14,0.6);user-select:none}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    button{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit;padding:8px 12px;border-radius:8px;cursor:pointer}
+    input[type=range]{width:100%}
+    footer{margin-top:12px;color:var(--muted);font-size:13px}
+    .centered{display:flex;flex-direction:column;gap:8px;padding:12px}
+    .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg, rgba(1,6,10,0.6), rgba(1,6,10,0.4));backdrop-filter: blur(4px);flex-direction:column;gap:10px}
+    .btn-primary{background:var(--accent);color:#002; border:none}
+    .small-muted{font-size:12px;color:var(--muted)}
+    @media(max-width:720px){.card{grid-template-columns:1fr;}
+      .left{order:2}
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="left">
+      <h1>ហ្គេមចុចគោលដៅ</h1>
+      <p class="small">ចុចគោលដៅដែលចលាចលក្នុងចំណតដើម្បីទទួលពិន្ទុ។ មានពេលកំណត់ — ស្ទង់ថា​អ្នកអាចសម្រេចបានប៉ុន្មានពិន្ទុនៅក្នុងរយៈពេលនេះ។</p>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="small-muted">ពិន្ទុ</div>
+          <div id="score" class="big">0</div>
+        </div>
+        <div class="stat">
+          <div class="small-muted">ពេលនៅសល់</div>
+          <div id="timeLeft" class="big">30</div>
+        </div>
+        <div class="stat">
+          <div class="small-muted">កម្រិត</div>
+          <div id="level" class="big">1</div>
+        </div>
+        <div class="stat">
+          <div class="small-muted">ពិន្ទុខ្ពស់</div>
+          <div id="highscore" class="big">0</div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <label class="small-muted">រយៈពេល (វិនាទី)</label>
+        <input id="duration" type="range" min="10" max="120" value="30">
+        <div class="small-muted">30 វិនាទី</div>
+      </div>
+
+      <div class="controls">
+        <button id="startBtn" class="btn-primary">ចាប់ផ្តើម</button>
+        <button id="pauseBtn">បញ្ឈប់/បន្ត</button>
+        <button id="resetBtn">កំណត់ឡើងវិញ</button>
+      </div>
+
+      <footer>
+        <div>ផ្ដល់ដោយ ChatGPT — ប្រែជាភាសាខ្មែរ</div>
+        <div style="margin-top:6px" class="small-muted">ចង់ប្ដូរកម្លាំង គោលដៅ ឬរយៈពេល? សូមប្រាប់ខ្ញុំ។</div>
+      </footer>
+    </div>
+
+    <div class="arena">
+      <div id="playArea">
+        <!-- ទីនេះគោលដៅនឹងបង្ហាញ -->
+        <div id="overlay" class="overlay" style="display:flex;flex-direction:column;">
+          <div style="font-size:28px;font-weight:700">របៀបលេង</div>
+          <div class="small-muted">ចុចគោលដៅពេលវាចល័ត ហើយក្លាយជាអ្នកឈ្នះពិន្ទុ!</div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="overlayStart" class="btn-primary">ចាប់ផ្តើម</button>
+            <button id="overlayHow" >រៀន​បន្ថែម</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ======= Variables ========
+    const playArea = document.getElementById('playArea');
+    const scoreEl = document.getElementById('score');
+    const timeLeftEl = document.getElementById('timeLeft');
+    const levelEl = document.getElementById('level');
+    const highscoreEl = document.getElementById('highscore');
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const durationInput = document.getElementById('duration');
+    const overlay = document.getElementById('overlay');
+    const overlayStart = document.getElementById('overlayStart');
+
+    let score = 0;
+    let timeLeft = Number(durationInput.value);
+    let duration = Number(durationInput.value);
+    let level = 1;
+    let running = false;
+    let gameTimer = null;
+    let spawnTimer = null;
+    let targetSpeed = 900; // ms between moves
+    const highscoreKey = 'clicker_highscore_v1';
+
+    // Load highscore
+    const saved = localStorage.getItem(highscoreKey);
+    if (saved) highscoreEl.textContent = saved;
+
+    // Update UI
+    function updateUI(){
+      scoreEl.textContent = score;
+      timeLeftEl.textContent = timeLeft;
+      levelEl.textContent = level;
+    }
+
+    // Random position within play area
+    function randomPos(size=64){
+      const rect = playArea.getBoundingClientRect();
+      const padding = 8;
+      const maxX = Math.max(0, rect.width - size - padding*2);
+      const maxY = Math.max(0, rect.height - size - padding*2);
+      return { x: Math.floor(Math.random()*maxX) + padding, y: Math.floor(Math.random()*maxY) + padding };
+    }
+
+    // Create target element
+    function spawnTarget(){
+      clearTargets();
+      const t = document.createElement('div');
+      t.className = 'target';
+      t.textContent = Math.floor(Math.random()*9)+1;
+      const size = 64 - Math.min(30, level*3);
+      t.style.width = size + 'px';
+      t.style.height = size + 'px';
+      const pos = randomPos(size);
+      t.style.left = pos.x + 'px';
+      t.style.top = pos.y + 'px';
+
+      // on click
+      t.addEventListener('click', (e)=>{
+        score += Number(t.textContent);
+        // small bonus for hitting moving target quickly
+        scoreEl.textContent = score;
+        // make it harder
+        level = 1 + Math.floor(score / 15);
+        targetSpeed = Math.max(250, 900 - (level-1)*80);
+        updateUI();
+        spawnTarget();
+      });
+
+      playArea.appendChild(t);
+      // move every targetSpeed ms
+      spawnTimer = setTimeout(()=>{
+        if (running) spawnTarget();
+      }, targetSpeed);
+    }
+
+    function clearTargets(){
+      const existing = playArea.querySelectorAll('.target');
+      existing.forEach(n=>n.remove());
+      if (spawnTimer) { clearTimeout(spawnTimer); spawnTimer = null; }
+    }
+
+    function startGame(){
+      if (running) return;
+      duration = Number(durationInput.value);
+      timeLeft = duration;
+      score = 0;
+      level = 1;
+      targetSpeed = 900;
+      running = true;
+      overlay.style.display = 'none';
+      updateUI();
+      spawnTarget();
+      gameTimer = setInterval(()=>{
+        timeLeft -= 1;
+        timeLeftEl.textContent = timeLeft;
+        if (timeLeft <= 0) endGame();
+      }, 1000);
+    }
+
+    function pauseGame(){
+      if (!running) { // resume
+        running = true;
+        spawnTarget();
+        gameTimer = setInterval(()=>{
+          timeLeft -= 1;
+          timeLeftEl.textContent = timeLeft;
+          if (timeLeft <= 0) endGame();
+        },1000);
+        pauseBtn.textContent = 'បញ្ឈប់/បន្ត';
+        overlay.style.display = 'none';
+      } else { // pause
+        running = false;
+        clearInterval(gameTimer); gameTimer = null;
+        clearTimeout(spawnTimer); spawnTimer = null;
+        pauseBtn.textContent = 'បន្ត';
+        overlay.style.display = 'flex';
+        overlay.innerHTML = `<div style="font-size:22px;font-weight:700">បានបញ្ឈប់</div><div class="small-muted">ពិន្ទុបច្ចុប្បន្ន: ${score}</div><div style="margin-top:8px"><button id='resumeBtn' class='btn-primary'>បន្តលេង</button></div>`;
+        document.getElementById('resumeBtn').addEventListener('click', ()=>{ overlay.style.display='none'; pauseGame(); });
+      }
+    }
+
+    function endGame(){
+      running = false;
+      clearInterval(gameTimer); gameTimer = null;
+      clearTimeout(spawnTimer); spawnTimer = null;
+      clearTargets();
+      // check highscore
+      const prev = Number(localStorage.getItem(highscoreKey) || 0);
+      if (score > prev) {
+        localStorage.setItem(highscoreKey, score);
+        highscoreEl.textContent = score;
+      }
+      overlay.style.display = 'flex';
+      overlay.innerHTML = `<div style="font-size:28px;font-weight:700">បញ្ចប់!</div><div class="small-muted">ពិន្ទុចុងក្រោយ: ${score}</div><div style="display:flex;gap:8px;margin-top:8px"><button id='playAgain' class='btn-primary'>លេងម្តងទៀត</button><button id='share'>ចែករំលែក</button></div>`;
+      document.getElementById('playAgain').addEventListener('click', ()=>{ overlay.style.display='none'; startGame(); });
+      document.getElementById('share').addEventListener('click', ()=>{ navigator.clipboard.writeText('ខ្ញុំទទួលបាន '+score+' ពិន្ទុ ក្នុងហ្គេម Clicker Game!'); alert('បានចម្លងទៅ clipboard — ចែករំលែកបាន'); });
+    }
+
+    function resetGame(){
+      running = false;
+      clearInterval(gameTimer); gameTimer = null;
+      clearTimeout(spawnTimer); spawnTimer = null;
+      clearTargets();
+      score = 0; level = 1; duration = Number(durationInput.value); timeLeft = duration;
+      overlay.style.display = 'flex';
+      overlay.innerHTML = `<div style="font-size:20px;font-weight:700">ហ្គេមត្រូវបានកំណត់ឡើងវិញ</div><div class='small-muted'>សូមចុច "ចាប់ផ្តើម" ដើម្បីចូលរួមម្តងទៀត</div><div style='margin-top:8px'><button id='ok' class='btn-primary'>OK</button></div>`;
+      document.getElementById('ok').addEventListener('click', ()=>{ overlay.style.display='none'; });
+      updateUI();
+    }
+
+    // UI events
+    startBtn.addEventListener('click', ()=>startGame());
+    pauseBtn.addEventListener('click', ()=>pauseGame());
+    resetBtn.addEventListener('click', ()=>resetGame());
+    durationInput.addEventListener('input', (e)=>{
+      const v = Number(e.target.value);
+      duration = v; timeLeft = v; document.querySelector('.small-muted').textContent = v + ' វិនាទី';
+      timeLeftEl.textContent = timeLeft;
+    });
+
+    overlayStart.addEventListener('click', ()=>startGame());
+    document.getElementById('overlayHow').addEventListener('click', ()=>{
+      overlay.innerHTML = '<div style="max-width:320px;text-align:center"><div style="font-weight:700">របៀបលេង</div><div class="small-muted" style="margin-top:6px">1) ចុច គោលដៅ ដើម្បីទទួលពិន្ទុ\n2) ពិន្ទុច្រើន → គោលដៅតូច និងរហ័សឡើង\n3) អ្នកអាចកត់ពិន្ទុខ្ពស់បានដោយចុចលឿន</div><div style="margin-top:8px"><button id="backBtn" class="btn-primary">ត្រឡប់ក្រោយ</button></div></div>';
+      document.getElementById('backBtn').addEventListener('click', ()=>{ overlay.style.display='none'; });
+    });
+
+    // prevent accidental drag selection
+    document.addEventListener('dragstart', e=>e.preventDefault());
+
+    // initial UI
+    updateUI();
+  </script>
+</body>
+</html>

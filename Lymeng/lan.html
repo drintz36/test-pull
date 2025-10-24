@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="km">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ហ្គេមបើកឡាន — Drive Car</title>
+  <style>
+    :root{--bg:#0b1220;--panel:#071022;--accent:#06b6d4;--muted:#94a3b8}
+    *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui, 'Noto Sans Khmer', sans-serif}
+    body{background:linear-gradient(180deg,#020617,#071428);color:#e6eef8;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+    .wrap{width:960px;max-width:100%;display:grid;grid-template-columns:1fr 320px;gap:16px}
+    .gamecard{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:12px;border-radius:12px}
+    canvas{background:#1b2b36;border-radius:8px;display:block;width:100%;height:600px}
+    .panel{background:var(--panel);padding:12px;border-radius:12px;display:flex;flex-direction:column;gap:10px}
+    h2{font-size:18px}
+    .stat{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.02);border-radius:8px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    button{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit;padding:8px 12px;border-radius:8px;cursor:pointer}
+    .btn-primary{background:var(--accent);border:none;color:#002}
+    .tiny{font-size:12px;color:var(--muted)}
+    .mobile-controls{display:flex;gap:6px;justify-content:center}
+    .mobile-controls button{flex:1;padding:12px}
+    @media(max-width:900px){.wrap{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="gamecard">
+      <h2>ហ្គេមបើកឡាន (Top-down)</h2>
+      <canvas id="game" width="800" height="600"></canvas>
+      <div class="tiny" style="margin-top:8px">គ្រប់គ្រង: ប៊ូតុងភាគរយ / អន្ដរជាតិក្នុងកុំព្យូទ័រ (Arrow Keys) — សម្រាប់ទូរស័ព្ទ ប្រើប៊ូតុងក្រោម</div>
+
+      <div id="mobile" style="margin-top:10px" class="mobile-controls">
+        <button id="leftBtn">⬅️</button>
+        <button id="upBtn">⬆️</button>
+        <button id="downBtn">⬇️</button>
+        <button id="rightBtn">➡️</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="stat"><div>ល្បឿន</div><div id="speed">0</div></div>
+      <div class="stat"><div>ពិន្ទុ (ចម្ងាយ)</div><div id="score">0</div></div>
+      <div class="stat"><div>ពិន្ទុខ្ពស់</div><div id="highscore">0</div></div>
+      <div style="display:flex;gap:8px">
+        <button id="startBtn" class="btn-primary">ចាប់ផ្តើម</button>
+        <button id="pauseBtn">បញ្ឈប់/បន្ត</button>
+        <button id="resetBtn">កំណត់ឡើងវិញ</button>
+      </div>
+
+      <div style="margin-top:8px">
+        <label class="tiny">កម្រិតឧបសគ្គ</label>
+        <input id="difficulty" type="range" min="1" max="5" value="2" style="width:100%">
+      </div>
+
+      <div style="margin-top:8px" class="tiny">គោលបំណង: ជៀសវាងឧបសគ្គ និងរក្សាលំដាប់ឡានដើម្បីបង្វិលបានច្រើនបំផុត (ចម្ងាយ = ពិន្ទុ)</div>
+    </div>
+  </div>
+
+  <script>
+    // Simple top-down car driving game
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const speedEl = document.getElementById('speed');
+    const scoreEl = document.getElementById('score');
+    const highEl = document.getElementById('highscore');
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const diff = document.getElementById('difficulty');
+    const leftBtn = document.getElementById('leftBtn');
+    const rightBtn = document.getElementById('rightBtn');
+    const upBtn = document.getElementById('upBtn');
+    const downBtn = document.getElementById('downBtn');
+
+    const highKey = 'drivecar_high_v1';
+    let high = Number(localStorage.getItem(highKey) || 0);
+    highEl.textContent = high;
+
+    const W = canvas.width; const H = canvas.height;
+
+    // player car
+    const car = { x: W/2, y: H - 120, angle: 0, speed: 0, width: 28, height: 48 };
+
+    // controls
+    const keys = { ArrowLeft:false, ArrowRight:false, ArrowUp:false, ArrowDown:false };
+    let mobile = {left:false,right:false,up:false,down:false};
+
+    // game state
+    let running = false; let paused = false; let score = 0; let lastTime = null; let obstacles = []; let spawnTimer = 0;
+
+    // physics
+    const MAX_SPEED = 6;
+    const ACC = 0.15; const BRAKE = 0.25; const FRICTION = 0.02;
+
+    // helper: draw car
+    function drawCar(x,y,a){
+      ctx.save(); ctx.translate(x,y); ctx.rotate(a);
+      // body
+      ctx.fillStyle = '#0ea5a4';
+      roundRect(ctx, -car.width/2, -car.height/2, car.width, car.height, 5, true, false);
+      // windows
+      ctx.fillStyle = 'rgba(255,255,255,0.14)';
+      ctx.fillRect(-10, -18, 20, 12);
+      ctx.restore();
+    }
+
+    function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+      if (r === undefined) r = 5;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+      if (fill) ctx.fill();
+      if (stroke) ctx.stroke();
+    }
+
+    // obstacles
+    function spawnObstacle(){
+      const width = 40 + Math.random()*60;
+      const x = Math.random()*(W - width) + width/2;
+      obstacles.push({x: x, y: -60, w: width, h: 24, speed: 1 + Number(diff.value) * 0.6 + Math.random()*1.2});
+    }
+
+    function reset(){
+      running = false; paused = false; score = 0; obstacles = []; car.x = W/2; car.y = H - 120; car.speed = 0; car.angle = 0; lastTime = null; spawnTimer = 0; updateUI();
+      ctx.clearRect(0,0,W,H);
+      // draw static road
+      drawScene(0);
+    }
+
+    function start(){ if (running) return; running = true; paused = false; lastTime = performance.now(); requestAnimationFrame(loop); }
+    function togglePause(){ if (!running) return; paused = !paused; if (!paused) { lastTime = performance.now(); requestAnimationFrame(loop); } }
+
+    function updateUI(){ speedEl.textContent = car.speed.toFixed(1); scoreEl.textContent = Math.floor(score); highEl.textContent = high; }
+
+    function loop(ts){
+      if (!running || paused) return;
+      const dt = Math.min(40, ts - (lastTime || ts))/16.67; // approx frames
+      lastTime = ts;
+
+      // controls
+      const left = keys.ArrowLeft || mobile.left;
+      const right = keys.ArrowRight || mobile.right;
+      const up = keys.ArrowUp || mobile.up;
+      const down = keys.ArrowDown || mobile.down;
+
+      if (up) car.speed += ACC * dt;
+      if (down) car.speed -= BRAKE * dt;
+      if (!up && !down) {
+        // friction
+        if (car.speed > 0) car.speed = Math.max(0, car.speed - FRICTION * dt);
+        else car.speed = Math.min(0, car.speed + FRICTION * dt);
+      }
+      car.speed = Math.max(-2, Math.min(MAX_SPEED + 1, car.speed));
+
+      // steering affected by speed
+      const steerPower = 0.035 * (Math.max(0.2, car.speed/ (MAX_SPEED+1)));
+      if (left) car.angle -= steerPower * dt * (1 + Math.abs(car.speed)/6);
+      if (right) car.angle += steerPower * dt * (1 + Math.abs(car.speed)/6);
+
+      // movement
+      car.x += Math.sin(car.angle) * car.speed * dt * 3;
+      car.y -= Math.cos(car.angle) * car.speed * dt * 3;
+
+      // bounds
+      car.x = Math.max(30, Math.min(W - 30, car.x));
+      car.y = Math.max(60, Math.min(H - 40, car.y));
+
+      // spawn obstacles
+      spawnTimer += dt;
+      if (spawnTimer > 30 - Number(diff.value)*4) { spawnTimer = 0; spawnObstacle(); }
+
+      // update obstacles
+      for (let i = obstacles.length-1; i>=0; i--){
+        const o = obstacles[i]; o.y += o.speed * dt * 2.5;
+        // remove offscreen
+        if (o.y > H + 80) obstacles.splice(i,1);
+        // collision
+        if (rectIntersect(o.x - o.w/2, o.y - o.h/2, o.w, o.h, car.x - car.width/2, car.y - car.height/2, car.width, car.height)){
+          // hit!
+          running = false;
+          if (Math.floor(score) > high) { high = Math.floor(score); localStorage.setItem(highKey, high); }
+          updateUI();
+          showGameOver();
+          return;
+        }
+      }
+
+      // scoring: based on forward movement
+      score += Math.max(0, car.speed) * 0.2 * dt;
+
+      // render
+      drawScene(ts);
+
+      updateUI();
+      requestAnimationFrame(loop);
+    }
+
+    function drawScene(ts){
+      // clear
+      ctx.clearRect(0,0,W,H);
+
+      // road background
+      ctx.fillStyle = '#0f1724';
+      ctx.fillRect(0,0,W,H);
+
+      // dashed center line
+      ctx.save();
+      ctx.translate(0, (ts||0)/4 % 40);
+      ctx.fillStyle = '#dbeafe';
+      for (let y=-80; y<H+80; y+=40){ ctx.fillRect(W/2 - 6, y, 12, 24); }
+      ctx.restore();
+
+      // obstacles
+      obstacles.forEach(o=>{
+        ctx.fillStyle = '#e11d48';
+        roundRect(ctx, o.x - o.w/2, o.y - o.h/2, o.w, o.h, 6, true, false);
+      });
+
+      // player car
+      drawCar(car.x, car.y, car.angle);
+
+      // HUD
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(8,8,160,56);
+      ctx.fillStyle = '#fff'; ctx.font = '14px system-ui'; ctx.fillText('ពិន្ទু: ' + Math.floor(score), 16, 28);
+      ctx.fillText('ល្បឿន: ' + car.speed.toFixed(1), 16, 48);
+    }
+
+    function rectIntersect(x1,y1,w1,h1,x2,y2,w2,h2){
+      return !(x2 > x1 + w1 || x2 + w2 < x1 || y2 > y1 + h1 || y2 + h2 < y1);
+    }
+
+    function showGameOver(){
+      // overlay
+      ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
+      ctx.fillStyle = '#fff'; ctx.font = '28px system-ui'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', W/2, H/2 - 8);
+      ctx.font = '16px system-ui'; ctx.fillText('ពិន្ទុ: ' + Math.floor(score), W/2, H/2 + 20);
+    }
+
+    // input
+    window.addEventListener('keydown', e=>{ if (e.key in keys){ keys[e.key] = true; e.preventDefault(); } });
+    window.addEventListener('keyup', e=>{ if (e.key in keys){ keys[e.key] = false; e.preventDefault(); } });
+
+    // mobile buttons
+    leftBtn.addEventListener('touchstart', ()=> mobile.left = true); leftBtn.addEventListener('touchend', ()=> mobile.left = false);
+    rightBtn.addEventListener('touchstart', ()=> mobile.right = true); rightBtn.addEventListener('touchend', ()=> mobile.right = false);
+    upBtn.addEventListener('touchstart', ()=> mobile.up = true); upBtn.addEventListener('touchend', ()=> mobile.up = false);
+    downBtn.addEventListener('touchstart', ()=> mobile.down = true); downBtn.addEventListener('touchend', ()=> mobile.down = false);
+
+    // mouse support for desktop: click and drag to steer
+    let dragging = false; canvas.addEventListener('mousedown', e=>{ dragging = true; }); window.addEventListener('mouseup', ()=> dragging = false);
+    canvas.addEventListener('mousemove', e=>{ if (!dragging) return; const rect = canvas.getBoundingClientRect(); const mx = e.clientX - rect.left; const dy = (mx - car.x) / W; car.angle += dy * 0.02; });
+    // UI buttons
+    startBtn.addEventListener('click', ()=>{ reset(); start(); });
+    pauseBtn.addEventListener('click', ()=>{ togglePause(); });
+    resetBtn.addEventListener('click', ()=>{ reset(); });
+
+    // init
+    reset();
+  </script>
+</body>
+</html>
